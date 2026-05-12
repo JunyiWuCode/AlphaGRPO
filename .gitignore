@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+*.whl
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+
+# Distribution / packaging
+*.tar.gz
+*.zip
+
+# Unit test / coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+nosetests.xml
+coverage.xml
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDE
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+wandb/
+
+# Model weights / large files
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+
+# Claude Code
+.claude/
+
+# Worktrees
+.worktrees/
+
+# Claude-generated release notes (local only)
+RELEASE_CHANGES.md
