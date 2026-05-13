@@ -3,7 +3,7 @@
 # AlphaGRPO
 
 <!-- Replace the placeholder arXiv ID when the final link is available. -->
-[![arXiv](https://img.shields.io/badge/arXiv-2605.xxxxx-b31b1b.svg)](https://arxiv.org/)
+[![arXiv](https://img.shields.io/badge/arXiv-2605.12495-b31b1b.svg)](https://arxiv.org/abs/2605.12495)
 [![Project Page](https://img.shields.io/badge/Project-Page-blue)](https://huangrh99.github.io/AlphaGRPO)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
 <!-- [![Models](https://img.shields.io/badge/🤗-Models-blue.svg)](https://huggingface.co/) -->
