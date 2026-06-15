@@ -14,6 +14,8 @@ pip-delete-this-directory.txt
 
 # Virtual environments
 .env
+*.env
+!alpha_grpo/rewards/keys/secret.env
 .venv
 env/
 venv/

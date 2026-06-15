@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=66", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alpha-grpo"
+version = "0.0.1"
+description = "Self-reflective multimodal generation via decompositional verifiable reward."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+dynamic = ["dependencies"]
+
+[tool.setuptools]
+package-dir = { "" = "alpha_grpo" }
+py-modules = ["common", "constants", "stat_tracking", "train", "utils"]
+
+[tool.setuptools.packages.find]
+where = ["alpha_grpo"]
+include = ["algorithms*", "dataset*", "rewards*", "tasks*"]
+
+[tool.setuptools.package-data]
+dataset = ["alphagrpo20k/*.jsonl"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }

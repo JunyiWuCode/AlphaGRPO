@@ -1,0 +1,17 @@
+torch==2.8.0
+flash_attn==2.8.3
+ml_collections
+diffusers==0.35.2
+trl==0.17.0
+deepspeed==0.16.4
+peft==0.17.0
+bitsandbytes
+transformers==4.57.1
+accelerate==1.11.0
+openai
+sglang[all]==0.5.5.post3
+sympy
+httpx==0.23.3
+ml_dtypes
+flashinfer-python==0.5.2
+qwen-vl-utils==0.0.14

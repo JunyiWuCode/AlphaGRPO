@@ -1,3 +1,2 @@
 alpha_grpo/dataset/alphagrpo20k/train.jsonl filter=lfs diff=lfs merge=lfs -text
-alpha_grpo/dataset/finescore_v2/train.jsonl filter=lfs diff=lfs merge=lfs -text
-.DS_Store filter=lfs diff=lfs merge=lfs -text
+alpha_grpo/dataset/alphagrpo20k/test.jsonl filter=lfs diff=lfs merge=lfs -text
