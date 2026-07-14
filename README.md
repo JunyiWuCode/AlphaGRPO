@@ -26,7 +26,7 @@ This codebase flexibly supports different RL methods for image and text generati
 
 - **[2026/07/14]** We release **SpectraReward**, *[Read It Back: Pretrained MLLMs Are Zero-Shot Reward Models for Text-to-Image Generation](https://arxiv.org/abs/2607.11886)*. SpectraReward turns a frozen pretrained MLLM into a training-free, off-the-shelf reward model for text-to-image RL by measuring how well the prompt can be "read back" from the generated image. Code and configs are in this repo; see the [SpectraReward](#spectrareward) section and [`docs/SPECTRAREWARD.md`](docs/SPECTRAREWARD.md).
 - **[2026/06/12]** We release **AlphaGRPO**, an RL framework for multimodal generation training on [BAGEL](https://github.com/bytedance-seed/BAGEL). Supporting tasks include reasoning text-to-image generation and self-reflective refinement.
-- **[2026/05/13]** We released the paper on [arXiv](https://arxiv.org/abs/2605.12495).
+- **[2026/05/13]** We released the paper, "AlphaGRPO: Self-Reflective Multimodal Generation via Decompositional Verifiable Reward" on [arXiv](https://arxiv.org/abs/2605.12495).
 
 ## 🏗️ Overview
 
