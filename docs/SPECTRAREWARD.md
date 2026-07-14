@@ -1,7 +1,8 @@
 # SpectraReward
 
-**Read It Back: Pretrained MLLMs Are Zero-Shot Reward Models for Text-to-Image Generation**
-[Project Page](https://huangrh99.github.io/SpectraReward/)
+**[Read It Back: Pretrained MLLMs Are Zero-Shot Reward Models for Text-to-Image Generation](https://arxiv.org/abs/2607.11886)**
+
+[arXiv](https://arxiv.org/abs/2607.11886) | [Project Page](https://huangrh99.github.io/SpectraReward/)
 
 **SpectraReward** turns a frozen pretrained MLLM into a training-free reward model for text-to-image RL. Instead of asking an MLLM to judge a generated image or to answer decomposed verification questions, SpectraReward measures how well the original prompt can be read back from the generated image: the image is given as visual context and the prompt is scored with a single teacher-forced forward pass. The reward is the mean image-conditioned prompt log-likelihood, `mean log p(prompt | image)`, which directly reuses the MLLM's pretrained image-text alignment with no preference labels and no reward-model fine-tuning.
 

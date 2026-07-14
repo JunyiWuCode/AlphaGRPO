@@ -3,7 +3,8 @@
 # AlphaGRPO
 ### Self-Reflective Multimodal Generation via Decompositional Verifiable Reward
 
-[![arXiv](https://img.shields.io/badge/arXiv-2605.12495-b31b1b.svg)](https://arxiv.org/abs/2605.12495)
+[![AlphaGRPO arXiv](https://img.shields.io/badge/AlphaGRPO-arXiv%3A2605.12495-b31b1b.svg)](https://arxiv.org/abs/2605.12495)
+[![SpectraReward arXiv](https://img.shields.io/badge/SpectraReward-arXiv%3A2607.11886-b31b1b.svg)](https://arxiv.org/abs/2607.11886)
 [![Project Page](https://img.shields.io/badge/AlphaGRPO-Page-blue)](https://huangrh99.github.io/AlphaGRPO)
 [![Project Page](https://img.shields.io/badge/SpectraReward-Page-blue)](https://huangrh99.github.io/SpectraReward/)
 [![Models](https://img.shields.io/badge/%F0%9F%A4%97-AlphaGRPO_Models-blue.svg)](https://huggingface.co/collections/huangrh9/alphagrpo)
@@ -23,7 +24,7 @@ This codebase flexibly supports different RL methods for image and text generati
 
 ## 📣 News
 
-- **[2026/07/14]** We release **SpectraReward**, *Read It Back: Pretrained MLLMs Are Zero-Shot Reward Models for Text-to-Image Generation*. SpectraReward turns a frozen pretrained MLLM into a training-free, off-the-shelf reward model for text-to-image RL by measuring how well the prompt can be "read back" from the generated image. Code and configs are in this repo; see the [SpectraReward](#spectrareward) section and [`docs/SPECTRAREWARD.md`](docs/SPECTRAREWARD.md).
+- **[2026/07/14]** We release **SpectraReward**, *[Read It Back: Pretrained MLLMs Are Zero-Shot Reward Models for Text-to-Image Generation](https://arxiv.org/abs/2607.11886)*. SpectraReward turns a frozen pretrained MLLM into a training-free, off-the-shelf reward model for text-to-image RL by measuring how well the prompt can be "read back" from the generated image. Code and configs are in this repo; see the [SpectraReward](#spectrareward) section and [`docs/SPECTRAREWARD.md`](docs/SPECTRAREWARD.md).
 - **[2026/06/12]** We release **AlphaGRPO**, an RL framework for multimodal generation training on [BAGEL](https://github.com/bytedance-seed/BAGEL). Supporting tasks include reasoning text-to-image generation and self-reflective refinement.
 - **[2026/05/13]** We released the paper on [arXiv](https://arxiv.org/abs/2605.12495).
 
@@ -110,7 +111,7 @@ torchrun --nnodes=$NUM_NODES --node_rank=$RANK --nproc_per_node=7 \
 
 ### SpectraReward
 
-*[Read It Back: Pretrained MLLMs Are Zero-Shot Reward Models for Text-to-Image Generation](https://huangrh99.github.io/SpectraReward/)*
+*[Read It Back: Pretrained MLLMs Are Zero-Shot Reward Models for Text-to-Image Generation](https://arxiv.org/abs/2607.11886)*
 
 **SpectraReward** turns a frozen pretrained MLLM into a training-free reward model for text-to-image RL. It scores how well the prompt can be *read back* from the generated image, using the **mean image-conditioned prompt log-likelihood** as the reward. **Self-SpectraReward** is the unified-model special case, where BAGEL's own understanding branch scores its generation branch, with no external reward model. See [`docs/SPECTRAREWARD.md`](docs/SPECTRAREWARD.md) for the full method, training setup, backbone support, and results.
 
@@ -197,7 +198,7 @@ This project builds upon [BAGEL](https://github.com/bytedance-seed/BAGEL) and [F
 
 ## ✏️ Citation
 
-If you find AlphaGRPO useful to your research, please consider citing:
+If you find AlphaGRPO or SpectraReward useful to your research, please consider citing:
 ```bibtex
 @inproceedings{huang2026alphagrpo,
   title={AlphaGRPO: Unlocking Self-Reflective Multimodal Generation in Unified Multimodal Models via Decompositional Verifiable Reward},
@@ -210,7 +211,10 @@ If you find AlphaGRPO useful to your research, please consider citing:
   title={Read It Back: Pretrained {MLLMs} Are Zero-Shot Reward Models for Text-to-Image Generation},
   author={Huang, Runhui and Zhang, Qihui and Liu, Zhe and Gao, Yu and Wu, Jie and Zhao, Hengshuang},
   year={2026},
-  url={https://huangrh99.github.io/SpectraReward/}
+  eprint={2607.11886},
+  archivePrefix={arXiv},
+  primaryClass={cs.CV},
+  url={https://arxiv.org/abs/2607.11886}
 }
 ```
 
