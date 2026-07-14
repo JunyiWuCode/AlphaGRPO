@@ -235,4 +235,4 @@ class BagelBaseTask(BaseTask):
 # Need torch for compute_rewards
 import torch
 
-from . import t2i, ti2t, reflect, mixed
+from . import t2i, ti2t, reflect, mixed, self_spectrareward_t2i

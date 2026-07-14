@@ -66,6 +66,13 @@ def _tensor_to_numpy_nhwc(images):
     return images.permute(0, 2, 3, 1).numpy()
 
 
+def _env_flag(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "yes", "y", "on"}
+
+
 def jpeg_incompressibility():
     def _fn(images, prompts, metadata):
         if isinstance(images, torch.Tensor):
@@ -537,6 +544,111 @@ def hpsv2_score():
         scores = hpsv2.score(images, prompts, hps_version="v2.1")
         # scores = [hpsv2.score(img, prompt, hps_version="v2.1")[0] for img, prompt in zip(images, prompts)]
         return torch.as_tensor(scores), {}
+    return _fn
+
+
+def _spectrareward_to_pil_list(images):
+    """Normalize tensor/ndarray/PIL inputs to a list of RGB PIL images."""
+    if isinstance(images, torch.Tensor):
+        return _tensor_to_pil_images(images)
+    if isinstance(images, np.ndarray):
+        if images.dtype != np.uint8:
+            images = (np.clip(images, 0, 1) * 255).round().astype(np.uint8)
+        return [Image.fromarray(image).convert("RGB") for image in images]
+    return [
+        image.convert("RGB") if isinstance(image, Image.Image)
+        else Image.fromarray(image).convert("RGB")
+        for image in images
+    ]
+
+
+def _spectrareward_remote_fn(url, model_id):
+    """Pickle-over-HTTP client for a remote SpectraReward server.
+
+    Protocol (matches scripts/mllm_server.py):
+      Request:  pickle.dumps({"images": [jpeg_bytes], "prompts": [str]})
+      Response: pickle.dumps({"outputs": [float]})
+
+    The server applies prompt prefix/suffix/user-instruction/EOS handling, so the
+    client only ships images and prompts.
+    """
+    import pickle
+    from io import BytesIO
+
+    import requests
+    from requests.adapters import HTTPAdapter, Retry
+
+    batch_size = 32
+    sess = requests.Session()
+    # Reward servers are internal endpoints; bypass any corp proxy from the env.
+    sess.trust_env = False
+    sess.proxies = {"http": None, "https": None}
+    retries = Retry(total=1000, backoff_factor=1, status_forcelist=[500], allowed_methods=False)
+    sess.mount("http://", HTTPAdapter(max_retries=retries))
+
+    def _fn(images, prompts, metadata):
+        pil_images = _spectrareward_to_pil_list(images)
+        prompts = list(prompts)
+        all_scores = []
+        for start in range(0, len(pil_images), batch_size):
+            img_batch = pil_images[start:start + batch_size]
+            prompt_batch = prompts[start:start + batch_size]
+            jpeg_images = []
+            for img in img_batch:
+                buf = BytesIO()
+                img.save(buf, format="JPEG")
+                jpeg_images.append(buf.getvalue())
+            response = sess.post(
+                url,
+                data=pickle.dumps({"images": jpeg_images, "prompts": prompt_batch}),
+                timeout=600,
+            )
+            all_scores += pickle.loads(response.content)["outputs"]
+        return all_scores, {"spectrareward_model": [model_id] * len(prompts)}
+
+    return _fn
+
+
+def spectrareward_score(device):
+    """External SpectraReward with a frozen MLLM reward model.
+
+    Two modes, selected by env:
+      - Remote: if SPECTRAREWARD_URL (or SPECTRAREWARD_URL_<SLUG>) is set, ship
+        images/prompts to a SpectraReward server (scripts/mllm_server.py).
+        Recommended for large reward MLLMs that should not share a GPU with BAGEL.
+      - In-process: otherwise load the reward MLLM locally with lazy GPU offload.
+
+    Configure via environment variables:
+      SPECTRAREWARD_MODEL_ID, SPECTRAREWARD_URL[_<SLUG>],
+      SPECTRAREWARD_PROMPT_PREFIX, SPECTRAREWARD_PROMPT_SUFFIX,
+      SPECTRAREWARD_USER_INSTRUCTION, SPECTRAREWARD_EXCLUDE_EOS,
+      SPECTRAREWARD_LAZY_GPU, SPECTRAREWARD_ATTN_IMPLEMENTATION.
+    """
+    model_id = os.environ.get("SPECTRAREWARD_MODEL_ID", "Qwen/Qwen3-VL-30B-A3B-Instruct")
+
+    slug = model_id.replace("/", "_").replace("-", "_").replace(".", "_").upper()
+    url = os.environ.get(f"SPECTRAREWARD_URL_{slug}") or os.environ.get("SPECTRAREWARD_URL")
+    if url:
+        return _spectrareward_remote_fn(url, model_id)
+
+    from rewards.spectrareward import SpectraRewardScorer
+
+    lazy_gpu_default = torch.device(device).type == "cuda"
+    scorer = SpectraRewardScorer(
+        model_id=model_id,
+        device=str(device),
+        prompt_prefix=os.environ.get("SPECTRAREWARD_PROMPT_PREFIX", ""),
+        prompt_suffix=os.environ.get("SPECTRAREWARD_PROMPT_SUFFIX", ""),
+        user_instruction=os.environ.get("SPECTRAREWARD_USER_INSTRUCTION", ""),
+        exclude_eos=_env_flag("SPECTRAREWARD_EXCLUDE_EOS", True),
+        lazy_gpu=_env_flag("SPECTRAREWARD_LAZY_GPU", lazy_gpu_default),
+        attn_implementation=os.environ.get("SPECTRAREWARD_ATTN_IMPLEMENTATION", "sdpa"),
+    )
+
+    def _fn(images, prompts, metadata):
+        scores = scorer(_spectrareward_to_pil_list(images), prompts)
+        return scores, {"spectrareward_model": [model_id] * len(prompts)}
+
     return _fn
 
 
@@ -1078,6 +1190,7 @@ def multi_score(device, score_dict):
         "image_similarity": image_similarity_score,
         "hpsv2": hpsv2_score,
         "hpsv3": hpsv3_score_remote,
+        "spectrareward": spectrareward_score,
         "viescore_qwen3vl_t2i": viescorer_t2i,
         "viescore_qwen3vl_t2i_compare": viescorer_t2i_compare,
         "dvreward": decompositional_verifiable_reward,

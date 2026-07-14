@@ -546,7 +546,7 @@ def main(_):
         )
 
     # prepare prompt and reward fn
-    reward_fn = multi_score(accelerator.device, config.reward_fn)
+    reward_fn = multi_score(accelerator.device, config.reward_fn) if config.reward_fn else None
     text_reward_fn = multi_score(accelerator.device, config.text_reward_fn) if getattr(config, 'text_reward_fn', None) else None
 
     train_dataloader, test_dataloader = build_dataloader(config, accelerator)

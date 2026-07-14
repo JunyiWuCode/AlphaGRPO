@@ -4,8 +4,10 @@
 ### Self-Reflective Multimodal Generation via Decompositional Verifiable Reward
 
 [![arXiv](https://img.shields.io/badge/arXiv-2605.12495-b31b1b.svg)](https://arxiv.org/abs/2605.12495)
-[![Project Page](https://img.shields.io/badge/Project-Page-blue)](https://huangrh99.github.io/AlphaGRPO)
-[![Models](https://img.shields.io/badge/%F0%9F%A4%97-Models-blue.svg)](https://huggingface.co/collections/huangrh9/alphagrpo)
+[![Project Page](https://img.shields.io/badge/AlphaGRPO-Page-blue)](https://huangrh99.github.io/AlphaGRPO)
+[![Project Page](https://img.shields.io/badge/SpectraReward-Page-blue)](https://huangrh99.github.io/SpectraReward/)
+[![Models](https://img.shields.io/badge/%F0%9F%A4%97-AlphaGRPO_Models-blue.svg)](https://huggingface.co/collections/huangrh9/alphagrpo)
+[![Models](https://img.shields.io/badge/%F0%9F%A4%97-SpectraReward_Models-blue.svg)](https://huggingface.co/collections/huangrh9/spectrareward)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
 </div>
 
@@ -21,6 +23,7 @@ This codebase flexibly supports different RL methods for image and text generati
 
 ## 📣 News
 
+- **[2026/07/14]** We release **SpectraReward**, *Read It Back: Pretrained MLLMs Are Zero-Shot Reward Models for Text-to-Image Generation*. SpectraReward turns a frozen pretrained MLLM into a training-free, off-the-shelf reward model for text-to-image RL by measuring how well the prompt can be "read back" from the generated image. Code and configs are in this repo; see the [SpectraReward](#spectrareward) section and [`docs/SPECTRAREWARD.md`](docs/SPECTRAREWARD.md).
 - **[2026/06/12]** We release **AlphaGRPO**, an RL framework for multimodal generation training on [BAGEL](https://github.com/bytedance-seed/BAGEL). Supporting tasks include reasoning text-to-image generation and self-reflective refinement.
 - **[2026/05/13]** We released the paper on [arXiv](https://arxiv.org/abs/2605.12495).
 
@@ -54,6 +57,8 @@ git lfs pull
 If the dataset looks unusually small, check that `alpha_grpo/dataset/alphagrpo20k/train.jsonl` is not a Git LFS pointer file.
 
 ## 🚀 Quick Start
+
+### AlphaGRPO (DVReward)
 
 Download the base [BAGEL](https://huggingface.co/ByteDance-Seed/BAGEL-7B-MoT) model weights before training.
 
@@ -102,7 +107,41 @@ task=alphagrpo_reflect # for self-reflective refinement task
 torchrun --nnodes=$NUM_NODES --node_rank=$RANK --nproc_per_node=7 \
   alpha_grpo/train.py --config config/bagel.py:${task}
 ```
- 
+
+### SpectraReward
+
+*[Read It Back: Pretrained MLLMs Are Zero-Shot Reward Models for Text-to-Image Generation](https://huangrh99.github.io/SpectraReward/)*
+
+**SpectraReward** turns a frozen pretrained MLLM into a training-free reward model for text-to-image RL. It scores how well the prompt can be *read back* from the generated image, using the **mean image-conditioned prompt log-likelihood** as the reward. **Self-SpectraReward** is the unified-model special case, where BAGEL's own understanding branch scores its generation branch, with no external reward model. See [`docs/SPECTRAREWARD.md`](docs/SPECTRAREWARD.md) for the full method, training setup, backbone support, and results.
+
+**External SpectraReward.** Run the reward MLLM on a remote server so it does not share GPU memory with BAGEL:
+
+```bash
+# On the reward-server node(s): serve the reward MLLM (8-way data-parallel here).
+bash scripts/serve_spectrareward.sh Qwen/Qwen3-VL-30B-A3B-Instruct 0.0.0.0 18090 8
+```
+
+```bash
+# On the training side: point to the server and launch as usual.
+export PYTHONPATH=$PYTHONPATH:$(pwd)/Bagel/
+export SPECTRAREWARD_MODEL_ID=Qwen/Qwen3-VL-30B-A3B-Instruct
+export SPECTRAREWARD_URL=http://<reward_server_ip>:18090   # IPv6: http://[${ip}]:18090
+
+torchrun --nnodes=$NUM_NODES --node_rank=$RANK --nproc_per_node=8 \
+  alpha_grpo/train.py --config config/bagel.py:spectrareward_t2i_awm
+```
+
+**Self-SpectraReward.** No external reward model is needed; BAGEL scores itself:
+
+```bash
+export PYTHONPATH=$PYTHONPATH:$(pwd)/Bagel/
+
+torchrun --nnodes=$NUM_NODES --node_rank=$RANK --nproc_per_node=8 \
+  alpha_grpo/train.py --config config/bagel.py:self_spectrareward_t2i_awm
+```
+
+For the in-process fallback, compatible MLLM backbones, configs, and experimental results, see [`docs/SPECTRAREWARD.md`](docs/SPECTRAREWARD.md).
+
 ## 📊 Evaluation
 
 Install eval dependencies:
@@ -140,7 +179,7 @@ bash scripts/eval/run_${task}_multickpt_reflect.sh
   <img src="assets/figures/png/main_results_gedit.png" width="65%" />
 </p>
 
-> **GEdit-Bench-EN.** Editing transfer performance — AlphaGRPO improves GEdit scores without training on editing tasks.
+> **GEdit-Bench-EN.** Editing transfer performance: AlphaGRPO improves GEdit scores without training on editing tasks.
 
 ## 📦 Train on Your Own Dataset
 
@@ -165,6 +204,13 @@ If you find AlphaGRPO useful to your research, please consider citing:
   author={Huang, Runhui and Wu, Jie and Yang, Rui and Liu, Zhe and Zhao, Hengshuang},
   booktitle={International Conference on Machine Learning (ICML)},
   year={2026}
+}
+
+@misc{huang2026readitback,
+  title={Read It Back: Pretrained {MLLMs} Are Zero-Shot Reward Models for Text-to-Image Generation},
+  author={Huang, Runhui and Zhang, Qihui and Liu, Zhe and Gao, Yu and Wu, Jie and Zhao, Hengshuang},
+  year={2026},
+  url={https://huangrh99.github.io/SpectraReward/}
 }
 ```
 

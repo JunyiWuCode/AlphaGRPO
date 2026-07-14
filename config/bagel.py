@@ -426,5 +426,171 @@ def alphagrpo_t2iThink_viescore():
     return config
 
 
+def _spectrareward_t2i_base():
+    """Shared T2I setup for SpectraReward-style configs."""
+    config = _base_config()
+
+    config.train.task = 't2i'
+    config.sample.num_steps = 16
+    config.train.num_train_timesteps = 6
+    config.train.timestep_fraction = config.train.num_train_timesteps / config.sample.num_steps
+    config.sample.sde_window_range = (0, 11)
+    config.sample.think = False
+    config.sample.num_image_per_prompt = 16
+    config.train.gradient_accumulation_steps = 8
+
+    config.dataset = 'alphagrpo20k'
+    config.prompt_fn = 'dvreward'
+    config.text_reward_fn = {}
+    config.train.use_think_text_format_reward = False
+
+    return config
+
+
+def spectrareward_t2i_awm():
+    """T2I AWM training with an external frozen MLLM SpectraReward.
+
+    The external scorer is selected through SPECTRAREWARD_MODEL_ID and related
+    environment variables; see README for the public release defaults.
+    """
+    config = _spectrareward_t2i_base()
+
+    config.reward_fn = {
+        "spectrareward": 1.0
+    }
+    # A local scorer shares the training GPU and must finish before the next
+    # rollout. A remote scorer can safely overlap reward computation.
+    config.train.async_reward_fn = bool(os.environ.get("SPECTRAREWARD_URL"))
+
+    config.train.image_algorithm = 'awm'
+    config.train.recompute_log_prob = False
+    config.train.true_ratio = False
+    config.train.ghuber_power = 0.25
+    config.train.image_clip_range = 1.0
+    config.train.advantage_max = 1
+    config.sample.noise_level = 0.
+
+    config.train.image_beta = 0.003
+    config.train.text_beta = 0.02
+    config.train.kl_weight = 'Uniform'
+    config.train.ema_beta = 1.0
+    config.train.kl_ema_weight = 'Uniform'
+    config.train.kl_ema_decay = 0.3
+    config.train.kl_ema_decay_type = 'linear'
+    config.train.ema = True
+    config.train.ema_decay = 0.99
+
+    config.logdir = "./logs/spectrareward_t2i_awm"
+    config.save_dir = config.logdir
+    return config
+
+
+def _self_spectrareward_t2i_base():
+    """Shared T2I setup for Self-SpectraReward configs."""
+    config = _spectrareward_t2i_base()
+
+    config.train.task = 'self_spectrareward_t2i'
+    config.train.async_reward_fn = False
+    config.reward_fn = {}
+
+    config.self_spectrareward = True
+    config.self_spectrareward_prompt_prefix = ""
+    config.self_spectrareward_prompt_suffix = ""
+    config.self_spectrareward_use_vae = True
+    config.self_spectrareward_exclude_eos = True
+
+    return config
+
+
+def self_spectrareward_t2i_grpo():
+    """T2I GRPO training with BAGEL's own Self-SpectraReward signal."""
+    config = _self_spectrareward_t2i_base()
+
+    config.train.algorithm = 'grpo'
+    config.train.image_algorithm = None
+    config.train.recompute_log_prob = False
+    config.train.true_ratio = True
+    config.train.image_clip_range = 1e-5
+    config.train.text_clip_range = 0.20
+    config.train.text_clip_range_high = 0.28
+    config.train.image_beta = 0.0
+    config.train.text_beta = 0.0
+
+    config.logdir = "./logs/self_spectrareward_t2i_grpo"
+    config.save_dir = config.logdir
+    return config
+
+
+def self_spectrareward_t2i_awm():
+    """T2I AWM training with BAGEL's own Self-SpectraReward signal."""
+    config = _self_spectrareward_t2i_base()
+
+    config.train.image_algorithm = 'awm'
+    config.train.recompute_log_prob = False
+    config.train.true_ratio = False
+    config.train.ghuber_power = 0.25
+    config.train.image_clip_range = 1.0
+    config.train.advantage_max = 1
+    config.sample.noise_level = 0.
+
+    config.train.image_beta = 0.003
+    config.train.text_beta = 0.02
+    config.train.kl_weight = 'Uniform'
+    config.train.ema_beta = 1.0
+    config.train.kl_ema_weight = 'Uniform'
+    config.train.kl_ema_decay = 0.3
+    config.train.kl_ema_decay_type = 'linear'
+    config.train.ema = True
+    config.train.ema_decay = 0.99
+
+    config.logdir = "./logs/self_spectrareward_t2i_awm"
+    config.save_dir = config.logdir
+    return config
+
+
+def self_spectrareward_t2i_nft():
+    """T2I DiffusionNFT training with BAGEL's own Self-SpectraReward signal.
+
+    Starts from the GRPO self-reward config and swaps in NFT's forward-process
+    loss, using the EMA "old" model and a reference-model KL.
+    """
+    config = self_spectrareward_t2i_grpo()
+
+    # NFT core
+    config.train.image_algorithm = 'nft'
+    config.train.recompute_log_prob = True
+    config.train.ghuber_power = 0.25
+    config.nft_beta = 1.0  # positive/negative prediction blend (trust region step size)
+
+    # Sampling
+    config.num_gpus = 32
+    config.sample.noise_level = 0.
+    config.sample.num_image_per_prompt = 16
+    config.train.gradient_accumulation_steps = max(
+        config.total_batch_size * config.sample.num_image_per_prompt
+        // (config.num_gpus * config.sample.train_batch_size), 1)
+    config.train.num_train_timesteps = 6
+    config.train.timestep_fraction = config.train.num_train_timesteps / config.sample.num_steps
+
+    # Ref model KL (v_ref = base model with adapter disabled)
+    config.train.image_beta = 0.0001  # KL weight (config.train.beta in official NFT)
+    config.train.text_beta = 0.02
+    config.train.kl_weight = 'Uniform'
+
+    # EMA adapter = "old" model in NFT (kl_ema adapter, slowly updated toward current)
+    config.train.ema_beta = 1.0
+    config.train.kl_ema_weight = 'Uniform'
+    config.train.kl_ema_decay = 0.3
+    config.train.kl_ema_decay_type = 'linear'
+
+    # Model saving EMA
+    config.train.ema = True
+    config.train.ema_decay = 0.99
+
+    config.logdir = "./logs/self_spectrareward_t2i_nft"
+    config.save_dir = config.logdir
+    return config
+
+
 def get_config(name):
     return globals()[name]()
