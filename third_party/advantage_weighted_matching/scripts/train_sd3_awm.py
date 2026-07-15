@@ -760,7 +760,10 @@ def main(_):
         train_dataloader = DataLoader(
             train_dataset,
             batch_sampler=train_sampler,
-            num_workers=1,
+            # The infinite sampler is reseeded immediately before every
+            # next(train_iter). Worker prefetch would consume indices using
+            # the previous seed and repeat the first prompt groups.
+            num_workers=0,
             collate_fn=TextPromptDataset.collate_fn,
             # persistent_workers=True
         )
@@ -790,7 +793,7 @@ def main(_):
         train_dataloader = DataLoader(
             train_dataset,
             batch_sampler=train_sampler,
-            num_workers=1,
+            num_workers=0,
             collate_fn=GenevalPromptDataset.collate_fn,
             # persistent_workers=True
         )
@@ -816,7 +819,7 @@ def main(_):
         train_dataloader = DataLoader(
             train_dataset,
             batch_sampler=train_sampler,
-            num_workers=1,
+            num_workers=0,
             collate_fn=JsonlPromptDataset.collate_fn,
         )
         test_dataloader = DataLoader(
