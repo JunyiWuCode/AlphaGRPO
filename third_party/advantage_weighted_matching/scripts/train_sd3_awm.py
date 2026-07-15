@@ -35,6 +35,7 @@ from peft import LoraConfig, get_peft_model, set_peft_model_state_dict, PeftMode
 from peft.utils import get_peft_model_state_dict
 import random
 import signal
+import shutil
 from torch.utils.data import Dataset, DataLoader, Sampler
 from flow_grpo.ema import EMAModuleWrapper
 from torch.optim.lr_scheduler import CosineAnnealingLR, ConstantLR, SequentialLR
@@ -533,6 +534,20 @@ def save_ckpt(save_dir, transformer, global_step, epoch, accelerator, ema, trans
         with open(os.path.join(save_root, "training_state.json"), "w") as handle:
             json.dump({"global_step": global_step, "epoch": epoch}, handle)
     accelerator.wait_for_everyone()
+    if accelerator.is_main_process:
+        checkpoint_root = os.path.join(save_dir, "checkpoints")
+        checkpoints = sorted(
+            (
+                entry
+                for entry in os.listdir(checkpoint_root)
+                if entry.startswith("checkpoint-")
+                and entry.split("-")[-1].isdigit()
+            ),
+            key=lambda entry: int(entry.split("-")[-1]),
+        )
+        for stale_checkpoint in checkpoints[:-config.num_checkpoint_limit]:
+            shutil.rmtree(os.path.join(checkpoint_root, stale_checkpoint))
+    accelerator.wait_for_everyone()
 
 def main(_):
     # basic Accelerate and logging setup
@@ -905,6 +920,7 @@ def main(_):
     else:
         first_epoch = 0
         global_step = 0
+    run_start_time = time.monotonic()
     if config.train.lora_path:
         parts = config.train.lora_path.split('/')
         checkpoint_folder = parts[-2]
@@ -1493,12 +1509,17 @@ def main(_):
             ):
                 tgt_param.data.copy_(tgt_param.detach().data * decay + src_param.detach().clone().data * (1.0 - decay))
 
+        run_time_limit_reached = bool(
+            config.max_run_seconds
+            and time.monotonic() - run_start_time >= config.max_run_seconds
+        )
         should_save = (
             global_step > 0
             and (
                 global_step % config.save_freq == 0
                 or reached_max_steps
                 or _STOP_REQUESTED
+                or run_time_limit_reached
             )
         )
         if should_save:
@@ -1512,11 +1533,16 @@ def main(_):
                 transformer_trainable_parameters,
                 config,
             )
-        if reached_max_steps or _STOP_REQUESTED:
+        if reached_max_steps or _STOP_REQUESTED or run_time_limit_reached:
             if reached_max_steps:
                 logger.info(f"Reached max_train_steps={config.max_train_steps}")
             if _STOP_REQUESTED:
                 logger.info("Stopping after a scheduler signal and completed checkpoint")
+            if run_time_limit_reached:
+                logger.info(
+                    f"Stopping after max_run_seconds={config.max_run_seconds} "
+                    "and completed checkpoint"
+                )
             break
 
 

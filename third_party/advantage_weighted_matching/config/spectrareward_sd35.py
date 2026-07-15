@@ -30,6 +30,7 @@ def get_config():
     config.mixed_precision = "bf16"
     config.num_epochs = 380
     config.max_train_steps = int(os.environ.get("MAX_TRAIN_STEPS", "380"))
+    config.max_run_seconds = int(os.environ.get("MAX_RUN_SECONDS", "0"))
     config.skip_initial_epochs = 0
     config.save_freq = int(os.environ.get("SAVE_FREQ", "10"))
     config.eval_freq = int(os.environ.get("EVAL_FREQ", "1000000"))
