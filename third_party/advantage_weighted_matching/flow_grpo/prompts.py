@@ -15,12 +15,12 @@ def _load_lines(path):
     Load lines from a file. First tries to load from `path` directly, and if that doesn't exist, searches the
     `flow_grpo/assets` directory for a file named `path`.
     """
-    if not os.path.exists(path):
-        newpath = ASSETS_PATH.joinpath(path)
-    if not os.path.exists(newpath):
+    resolved_path = path
+    if not os.path.exists(resolved_path):
+        resolved_path = ASSETS_PATH.joinpath(path)
+    if not os.path.exists(resolved_path):
         raise FileNotFoundError(f"Could not find {path} or flow_grpo.assets/{path}")
-    path = newpath
-    with open(path, "r") as f:
+    with open(resolved_path, "r") as f:
         return [line.strip() for line in f.readlines()]
 
 
