@@ -563,7 +563,9 @@ def main(_):
 
     accelerator_config = ProjectConfiguration(
         project_dir=os.path.join(config.logdir, config.run_name),
-        automatic_checkpoint_naming=True,
+        # save_ckpt passes a globally numbered checkpoint directory explicitly.
+        # Automatic naming ignores that path and breaks the resume contract.
+        automatic_checkpoint_naming=False,
         total_limit=config.num_checkpoint_limit,
     )
 
