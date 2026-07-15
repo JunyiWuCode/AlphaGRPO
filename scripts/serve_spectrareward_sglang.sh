@@ -12,6 +12,9 @@ TP=${5:-${SPECTRAREWARD_TP:-1}}
 
 unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
 export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:False}
+if [[ -n ${PYTHON_BIN:-} ]]; then
+  export PATH="$(dirname "${PYTHON_BIN}"):${PATH}"
+fi
 
 echo "[spectrareward-sglang] model=${MODEL} host=${HOST} port=${PORT} dp=${DP} tp=${TP}"
 
@@ -27,7 +30,8 @@ exec "${PYTHON_BIN:-python}" -m sglang.launch_server \
   --chunked-prefill-size "${SPECTRAREWARD_CHUNKED_PREFILL_SIZE:-2048}" \
   --max-prefill-tokens "${SPECTRAREWARD_MAX_PREFILL_TOKENS:-32768}" \
   --context-length "${SPECTRAREWARD_CONTEXT_LENGTH:-4096}" \
-  --max-running-requests "${SPECTRAREWARD_MAX_RUNNING_REQUESTS:-256}" \
+  --max-running-requests "${SPECTRAREWARD_MAX_RUNNING_REQUESTS:-32}" \
   --max-queued-requests "${SPECTRAREWARD_MAX_QUEUED_REQUESTS:-4096}" \
   --schedule-policy lpm \
+  --disable-cuda-graph \
   --log-requests-level 0
