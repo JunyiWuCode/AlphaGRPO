@@ -20,3 +20,6 @@ ml_dtypes
 flashinfer-python==0.5.2
 qwen-vl-utils==0.0.14
 wandb
+typing-extensions>=4.10,<5
+distro>=1.7,<2
+jiter>=0.10,<1
