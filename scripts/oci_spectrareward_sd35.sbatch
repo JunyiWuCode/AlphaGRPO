@@ -4,6 +4,7 @@
 #SBATCH --partition=interactive
 #SBATCH --nodes=2
 #SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=64
 #SBATCH --gpus-per-node=8
 #SBATCH --time=04:00:00
 #SBATCH --signal=USR1@600
@@ -38,6 +39,8 @@ export SPECTRAREWARD_URL=http://${REWARD_NODE}:${PORT}
 export SPECTRAREWARD_MAX_CONCURRENT=${SPECTRAREWARD_MAX_CONCURRENT:-8}
 export WANDB_MODE=${WANDB_MODE:-offline}
 export PYTHON_BIN=${ENV_PREFIX}/bin/python
+export OMP_NUM_THREADS=${OMP_NUM_THREADS:-8}
+export TOKENIZERS_PARALLELISM=${TOKENIZERS_PARALLELISM:-false}
 
 echo "job=${SLURM_JOB_ID} policy_node=${POLICY_NODE} reward_node=${REWARD_NODE}"
 echo "root=${ROOT} log_dir=${LOG_DIR} reward_url=${SPECTRAREWARD_URL}"
