@@ -91,10 +91,10 @@ class SpectraRewardSGLangClient:
         self.processor = processor
         self.tokenizer = getattr(self.processor, "tokenizer", self.processor)
         self.end_token_ids = self._resolve_end_token_ids() if exclude_eos else set()
-        self.session = session or self._make_session()
+        self.session = session or self._make_session(max_concurrent)
 
     @staticmethod
-    def _make_session():
+    def _make_session(max_concurrent: int):
         session = requests.Session()
         session.trust_env = False
         retry = Retry(
@@ -103,8 +103,15 @@ class SpectraRewardSGLangClient:
             status_forcelist=[429, 500, 502, 503, 504],
             allowed_methods=False,
         )
-        session.mount("http://", HTTPAdapter(max_retries=retry))
-        session.mount("https://", HTTPAdapter(max_retries=retry))
+        pool_size = max(1, max_concurrent)
+        adapter = HTTPAdapter(
+            max_retries=retry,
+            pool_connections=pool_size,
+            pool_maxsize=pool_size,
+            pool_block=True,
+        )
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
         return session
 
     def _resolve_end_token_ids(self) -> set[int]:
