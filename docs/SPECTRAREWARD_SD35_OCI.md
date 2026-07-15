@@ -25,6 +25,8 @@ The paper used 32 policy GPUs, batch size 2, and gradient accumulation 8. The
 
 Install the pinned requirements in the cluster environment before allocating
 GPUs. The Slurm launcher does not install packages on compute nodes.
+By default it uses `/home/hcai/workspace/anaconda3/envs/alpha_grpo`; override
+this with `ALPHAGRPO_ENV` when needed.
 
 ```bash
 cd /home/hcai/workspace/code/junyiwu/AlphaGRPO

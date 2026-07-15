@@ -18,6 +18,7 @@ RUN_DIR=${RUN_ROOT}/${SLURM_JOB_ID}
 LOG_DIR=${LOG_DIR:-${RUN_ROOT}/training}
 PORT=${SPECTRAREWARD_PORT:-18090}
 MODEL=${SPECTRAREWARD_MODEL_ID:-Qwen/Qwen3-VL-8B-Instruct}
+ENV_PREFIX=${ALPHAGRPO_ENV:-/home/hcai/workspace/anaconda3/envs/alpha_grpo}
 mkdir -p "${RUN_DIR}" "${LOG_DIR}"
 
 mapfile -t NODES < <(scontrol show hostnames "${SLURM_JOB_NODELIST}")
@@ -36,6 +37,7 @@ export SPECTRAREWARD_BACKEND=sglang
 export SPECTRAREWARD_URL=http://${REWARD_NODE}:${PORT}
 export SPECTRAREWARD_MAX_CONCURRENT=${SPECTRAREWARD_MAX_CONCURRENT:-8}
 export WANDB_MODE=${WANDB_MODE:-offline}
+export PYTHON_BIN=${ENV_PREFIX}/bin/python
 
 echo "job=${SLURM_JOB_ID} policy_node=${POLICY_NODE} reward_node=${REWARD_NODE}"
 echo "root=${ROOT} log_dir=${LOG_DIR} reward_url=${SPECTRAREWARD_URL}"
@@ -74,5 +76,5 @@ for attempt in $(seq 1 120); do
 done
 
 srun --nodes=1 --ntasks=1 --nodelist="${POLICY_NODE}" --gpus-per-node=8 --exclusive \
-  bash -lc "cd '${ROOT}' && accelerate launch --multi_gpu --num_machines 1 --num_processes 8 --mixed_precision bf16 third_party/advantage_weighted_matching/scripts/train_sd3_awm.py --config third_party/advantage_weighted_matching/config/spectrareward_sd35.py" \
+  bash -lc "cd '${ROOT}' && '${ENV_PREFIX}/bin/accelerate' launch --multi_gpu --num_machines 1 --num_processes 8 --mixed_precision bf16 third_party/advantage_weighted_matching/scripts/train_sd3_awm.py --config third_party/advantage_weighted_matching/config/spectrareward_sd35.py" \
   2>&1 | tee "${RUN_DIR}/train.log"

@@ -15,7 +15,7 @@ export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:Fa
 
 echo "[spectrareward-sglang] model=${MODEL} host=${HOST} port=${PORT} dp=${DP} tp=${TP}"
 
-exec python -m sglang.launch_server \
+exec "${PYTHON_BIN:-python}" -m sglang.launch_server \
   --model-path "${MODEL}" \
   --host "${HOST}" \
   --port "${PORT}" \
