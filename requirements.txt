@@ -1,5 +1,6 @@
 torch==2.8.0
-flash_attn==2.8.3
+# FlashAttention's public Torch 2.8 wheel requires glibc 2.32, while OCI A100
+# nodes use an older glibc. SD3 uses PyTorch SDPA and SGLang uses its own kernels.
 ml_collections
 diffusers==0.35.2
 trl==0.17.0

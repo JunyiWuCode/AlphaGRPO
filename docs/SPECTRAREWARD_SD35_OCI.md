@@ -27,6 +27,8 @@ Install the pinned requirements in the cluster environment before allocating
 GPUs. The Slurm launcher does not install packages on compute nodes.
 By default it uses `/home/hcai/workspace/anaconda3/envs/alpha_grpo`; override
 this with `ALPHAGRPO_ENV` when needed.
+Do not install the public FlashAttention 2.8.3 wheel on OCI A100 nodes: it
+requires glibc 2.32. This runner uses PyTorch SDPA and SGLang kernels instead.
 
 ```bash
 cd /home/hcai/workspace/code/junyiwu/AlphaGRPO
