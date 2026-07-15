@@ -612,14 +612,17 @@ def _spectrareward_remote_fn(url, model_id):
 def spectrareward_score(device):
     """External SpectraReward with a frozen MLLM reward model.
 
-    Two modes, selected by env:
+    Three modes, selected by env:
+      - SGLang: SPECTRAREWARD_BACKEND=sglang uses native prefill logprobs from
+        SPECTRAREWARD_URL (scripts/serve_spectrareward_sglang.sh).
       - Remote: if SPECTRAREWARD_URL (or SPECTRAREWARD_URL_<SLUG>) is set, ship
-        images/prompts to a SpectraReward server (scripts/mllm_server.py).
+        images/prompts to the legacy pickle server (scripts/mllm_server.py).
         Recommended for large reward MLLMs that should not share a GPU with BAGEL.
       - In-process: otherwise load the reward MLLM locally with lazy GPU offload.
 
     Configure via environment variables:
-      SPECTRAREWARD_MODEL_ID, SPECTRAREWARD_URL[_<SLUG>],
+      SPECTRAREWARD_MODEL_ID, SPECTRAREWARD_BACKEND,
+      SPECTRAREWARD_URL[_<SLUG>], SPECTRAREWARD_MAX_CONCURRENT,
       SPECTRAREWARD_PROMPT_PREFIX, SPECTRAREWARD_PROMPT_SUFFIX,
       SPECTRAREWARD_USER_INSTRUCTION, SPECTRAREWARD_EXCLUDE_EOS,
       SPECTRAREWARD_LAZY_GPU, SPECTRAREWARD_ATTN_IMPLEMENTATION.
@@ -628,6 +631,34 @@ def spectrareward_score(device):
 
     slug = model_id.replace("/", "_").replace("-", "_").replace(".", "_").upper()
     url = os.environ.get(f"SPECTRAREWARD_URL_{slug}") or os.environ.get("SPECTRAREWARD_URL")
+    backend = os.environ.get("SPECTRAREWARD_BACKEND", "pickle").lower()
+    if backend == "sglang":
+        if not url:
+            raise ValueError("SPECTRAREWARD_BACKEND=sglang requires SPECTRAREWARD_URL")
+        from rewards.sglang_spectrareward import SpectraRewardSGLangClient
+
+        scorer = SpectraRewardSGLangClient(
+            model_id=model_id,
+            base_url=url,
+            prompt_prefix=os.environ.get("SPECTRAREWARD_PROMPT_PREFIX", ""),
+            prompt_suffix=os.environ.get("SPECTRAREWARD_PROMPT_SUFFIX", ""),
+            user_instruction=os.environ.get("SPECTRAREWARD_USER_INSTRUCTION", ""),
+            exclude_eos=_env_flag("SPECTRAREWARD_EXCLUDE_EOS", True),
+            max_concurrent=int(os.environ.get("SPECTRAREWARD_MAX_CONCURRENT", "8")),
+            timeout=float(os.environ.get("SPECTRAREWARD_TIMEOUT", "600")),
+        )
+
+        def _sglang_fn(images, prompts, metadata):
+            del metadata
+            prompts = list(prompts)
+            scores = scorer(_spectrareward_to_pil_list(images), prompts)
+            return scores, {"spectrareward_model": [model_id] * len(prompts)}
+
+        return _sglang_fn
+    if backend != "pickle":
+        raise ValueError(
+            f"Unknown SPECTRAREWARD_BACKEND={backend!r}; expected 'sglang' or 'pickle'"
+        )
     if url:
         return _spectrareward_remote_fn(url, model_id)
 
