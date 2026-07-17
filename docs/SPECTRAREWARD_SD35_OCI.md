@@ -64,7 +64,8 @@ values.
 The SD3.5 runner has a paired, distributed benchmark generator for GenEval,
 TIIF-Bench, DPG-Bench, GenEval2, and WISE. Baseline and RL use identical seeds,
 512 px resolution, 16 SA-Solver steps, and CFG 4. Existing images are skipped,
-so a four-hour job can be resubmitted safely.
+so a four-hour job can be resubmitted safely. Generation starts at batch size
+48 per GPU and halves the local batch automatically if CUDA runs out of memory.
 
 ```bash
 mkdir -p experiments/spectrareward_sd35_benchmarks

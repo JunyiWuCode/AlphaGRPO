@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import gc
 import glob
 import json
 import os
@@ -220,11 +221,6 @@ def _load_pipeline(model_id: str, lora_path: str | None, device: Any):
     return pipe
 
 
-def _batched(values: list[GenerationTask], batch_size: int):
-    for start in range(0, len(values), batch_size):
-        yield values[start : start + batch_size]
-
-
 def limit_tasks(tasks: list[GenerationTask], max_tasks: int) -> list[GenerationTask]:
     return tasks[:max_tasks] if max_tasks > 0 else tasks
 
@@ -240,7 +236,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resolution", type=int, default=512)
     parser.add_argument("--num-steps", type=int, default=16)
     parser.add_argument("--guidance-scale", type=float, default=4.0)
-    parser.add_argument("--batch-size", type=int, default=2)
+    parser.add_argument("--batch-size", type=int, default=48)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--max-tasks", type=int, default=0)
     return parser.parse_args()
@@ -293,23 +289,34 @@ def main() -> None:
     device = torch.device("cuda", local_rank)
     pipe = _load_pipeline(args.model_id, args.lora_path or None, device)
     completed = 0
-    for batch in _batched(pending, args.batch_size):
+    batch_size = args.batch_size
+    while completed < len(pending):
+        batch = pending[completed : completed + batch_size]
         generators = [torch.Generator(device=device).manual_seed(task.seed) for task in batch]
-        with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
-            result, _ = pipeline_with_logprob(
-                pipe,
-                prompt=[task.prompt for task in batch],
-                height=args.resolution,
-                width=args.resolution,
-                num_inference_steps=args.num_steps,
-                guidance_scale=args.guidance_scale,
-                generator=generators,
-                output_type="pil",
-                return_dict=True,
-                noise_level=0.0,
-                sde_frac=0.0,
-                use_sa_solver=True,
-            )
+        try:
+            with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
+                result, _ = pipeline_with_logprob(
+                    pipe,
+                    prompt=[task.prompt for task in batch],
+                    height=args.resolution,
+                    width=args.resolution,
+                    num_inference_steps=args.num_steps,
+                    guidance_scale=args.guidance_scale,
+                    generator=generators,
+                    output_type="pil",
+                    return_dict=True,
+                    noise_level=0.0,
+                    sde_frac=0.0,
+                    use_sa_solver=True,
+                )
+        except torch.cuda.OutOfMemoryError:
+            if batch_size == 1:
+                raise
+            batch_size = max(1, batch_size // 2)
+            gc.collect()
+            torch.cuda.empty_cache()
+            print(f"rank={rank} CUDA OOM; retrying with batch_size={batch_size}", flush=True)
+            continue
         for task, image in zip(batch, result.images, strict=True):
             path = Path(task.output_path)
             path.parent.mkdir(parents=True, exist_ok=True)

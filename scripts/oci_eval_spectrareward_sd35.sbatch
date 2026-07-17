@@ -19,6 +19,7 @@ VARIANT=${VARIANT:?Set VARIANT to baseline or spectrareward_step380}
 LORA_PATH=${LORA_PATH:-}
 BENCHMARKS=${BENCHMARKS:-geneval,tiif,dpg,geneval2,wise}
 MAX_TASKS=${MAX_TASKS:-0}
+BATCH_SIZE=${BATCH_SIZE:-48}
 
 mkdir -p "${OUTPUT_ROOT}"
 export PYTHONPATH=${ROOT}/alpha_grpo:${ROOT}/third_party/advantage_weighted_matching:${PYTHONPATH:-}
@@ -44,6 +45,6 @@ cd "${ROOT}"
   --resolution 512 \
   --num-steps 16 \
   --guidance-scale 4.0 \
-  --batch-size 2 \
+  --batch-size "${BATCH_SIZE}" \
   --max-tasks "${MAX_TASKS}" \
   --seed 0
