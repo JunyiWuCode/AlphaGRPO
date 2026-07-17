@@ -81,3 +81,11 @@ LORA_PATH=$PWD/experiments/spectrareward_sd35/training/checkpoints/checkpoint-38
 The generated directory layouts are compatible with the benchmark scorers in
 `Bagel/eval/gen`. TIIF-Bench and WISE require an OpenAI-compatible judge API;
 image generation does not require those credentials.
+
+On Draco, where the interactive QOS may allow one job but two nodes, launch the
+paired job. It runs baseline and the step-380 EMA LoRA concurrently on separate
+8-GPU nodes:
+
+```bash
+sbatch scripts/oci_eval_spectrareward_sd35_pair.sbatch
+```
