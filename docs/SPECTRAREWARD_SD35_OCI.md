@@ -58,3 +58,25 @@ hyperparameters follow official AWM. Consequently `beta=0.001`, gHuber
 weighting, EMA-KL, and LoRA target modules follow the official SD3.5-M GenEval
 configuration and should be recorded as inferred settings, not paper-specified
 values.
+
+## Paper benchmark generation
+
+The SD3.5 runner has a paired, distributed benchmark generator for GenEval,
+TIIF-Bench, DPG-Bench, GenEval2, and WISE. Baseline and RL use identical seeds,
+512 px resolution, 16 SA-Solver steps, and CFG 4. Existing images are skipped,
+so a four-hour job can be resubmitted safely.
+
+```bash
+mkdir -p experiments/spectrareward_sd35_benchmarks
+
+VARIANT=baseline \
+  sbatch --export=ALL,VARIANT scripts/oci_eval_spectrareward_sd35.sbatch
+
+VARIANT=spectrareward_step380 \
+LORA_PATH=$PWD/experiments/spectrareward_sd35/training/checkpoints/checkpoint-380/lora_ema \
+  sbatch --export=ALL,VARIANT,LORA_PATH scripts/oci_eval_spectrareward_sd35.sbatch
+```
+
+The generated directory layouts are compatible with the benchmark scorers in
+`Bagel/eval/gen`. TIIF-Bench and WISE require an OpenAI-compatible judge API;
+image generation does not require those credentials.
