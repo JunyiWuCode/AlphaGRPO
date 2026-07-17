@@ -14,6 +14,11 @@ SPEC.loader.exec_module(MODULE)
 
 
 class SD35BenchmarkManifestTest(unittest.TestCase):
+    def test_task_limit_is_disabled_by_zero(self):
+        tasks = [object(), object()]
+        self.assertIs(MODULE.limit_tasks(tasks, 0), tasks)
+        self.assertEqual(len(MODULE.limit_tasks(tasks, 1)), 1)
+
     def test_builds_paper_benchmark_layouts(self):
         data_root = Path(__file__).parents[1] / "Bagel/eval/gen"
         with tempfile.TemporaryDirectory() as directory:

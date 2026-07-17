@@ -225,6 +225,10 @@ def _batched(values: list[GenerationTask], batch_size: int):
         yield values[start : start + batch_size]
 
 
+def limit_tasks(tasks: list[GenerationTask], max_tasks: int) -> list[GenerationTask]:
+    return tasks[:max_tasks] if max_tasks > 0 else tasks
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-root", type=Path, required=True)
@@ -238,6 +242,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--guidance-scale", type=float, default=4.0)
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--max-tasks", type=int, default=0)
     return parser.parse_args()
 
 
@@ -261,6 +266,7 @@ def main() -> None:
         dist.barrier()
 
     tasks = build_tasks(args.data_root.resolve(), variant_root, benchmarks, args.seed)
+    tasks = limit_tasks(tasks, args.max_tasks)
     if rank == 0:
         write_benchmark_sidecars(args.data_root.resolve(), variant_root, tasks)
         manifest_path = variant_root / "manifest.jsonl"
