@@ -184,9 +184,9 @@ def _distributed_context() -> tuple[int, int, int]:
     world_size = int(os.environ.get("WORLD_SIZE", "1"))
     rank = int(os.environ.get("RANK", "0"))
     local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+    torch.cuda.set_device(local_rank)
     if world_size > 1:
         dist.init_process_group("nccl")
-    torch.cuda.set_device(local_rank)
     return rank, local_rank, world_size
 
 
