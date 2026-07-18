@@ -5,6 +5,7 @@ pillow
 tqdm
 
 # for modelscope
+addict
 cloudpickle
 decord>=0.6.0
 diffusers
@@ -20,7 +21,9 @@ rapidfuzz
 rouge_score<=0.0.4
 safetensors
 # scikit-video
+simplejson
 soundfile
+sortedcontainers
 taming-transformers-rom1504
 tiktoken
 timm
