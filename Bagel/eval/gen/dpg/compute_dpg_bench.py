@@ -50,24 +50,56 @@ def parse_args():
     return args
 
 
+class MPlugVQAPreprocessor:
+    def __init__(self, model_dir, tokenizer_max_length=25):
+        from modelscope.models.multi_modal.mplug import CONFIG_NAME, MPlugConfig
+        from torchvision import transforms
+        from transformers import BertTokenizer
+
+        config = MPlugConfig.from_yaml_file(osp.join(model_dir, CONFIG_NAME))
+        self.tokenizer = BertTokenizer.from_pretrained(model_dir)
+        self.tokenizer_max_length = tokenizer_max_length
+        self.image_transform = transforms.Compose([
+            transforms.Resize(
+                (config.image_res, config.image_res),
+                interpolation=Image.BICUBIC,
+            ),
+            transforms.ToTensor(),
+            transforms.Normalize(
+                mean=(0.48145466, 0.4578275, 0.40821073),
+                std=(0.26862954, 0.26130258, 0.27577711),
+            ),
+        ])
+
+    def __call__(self, image, question):
+        image = self.image_transform(image.convert('RGB')).unsqueeze(0)
+        question = self.tokenizer(
+            question.lower(),
+            padding='max_length',
+            truncation=True,
+            max_length=self.tokenizer_max_length,
+            return_tensors='pt',
+        )
+        return {'image': image, 'question': question}
+
+
 class MPLUG(torch.nn.Module):
     def __init__(self, ckpt='damo/mplug_visual-question-answering_coco_large_en', device='gpu'):
         super().__init__()
         from modelscope.hub.snapshot_download import snapshot_download
         from modelscope.models.multi_modal.mplug_for_all_tasks import MPlugForAllTasks
-        from modelscope.preprocessors.multi_modal import MPlugPreprocessor
         from modelscope.utils.constant import Tasks
 
         self.device = torch.device(device)
         model_dir = snapshot_download(ckpt)
-        self.preprocessor = MPlugPreprocessor(model_dir)
+        self.preprocessor = MPlugVQAPreprocessor(model_dir)
         self.model = MPlugForAllTasks(
             model_dir, task=Tasks.visual_question_answering
         ).to(self.device)
         self.model.eval()
 
     def vqa(self, image, question):
-        inputs = self.preprocessor({'image': image, 'question': question})
+        inputs = self.preprocessor(image, question)
         inputs = {
             key: value.to(self.device) if hasattr(value, 'to') else value
             for key, value in inputs.items()
