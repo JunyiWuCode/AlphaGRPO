@@ -6,9 +6,6 @@ from collections import defaultdict
 
 import numpy as np
 import pandas as pd
-import torch
-from accelerate import Accelerator
-from accelerate.utils import gather_object
 from PIL import Image
 from tqdm import tqdm
 
@@ -83,13 +80,14 @@ class MPlugVQAPreprocessor:
         return {'image': image, 'question': question}
 
 
-class MPLUG(torch.nn.Module):
+class MPLUG:
     def __init__(self, ckpt='damo/mplug_visual-question-answering_coco_large_en', device='gpu'):
-        super().__init__()
+        import torch
         from modelscope.hub.snapshot_download import snapshot_download
         from modelscope.models.multi_modal.mplug_for_all_tasks import MPlugForAllTasks
         from modelscope.utils.constant import Tasks
 
+        self.torch = torch
         self.device = torch.device(device)
         model_dir = snapshot_download(ckpt)
         self.preprocessor = MPlugVQAPreprocessor(model_dir)
@@ -104,7 +102,7 @@ class MPLUG(torch.nn.Module):
             key: value.to(self.device) if hasattr(value, 'to') else value
             for key, value in inputs.items()
         }
-        with torch.inference_mode():
+        with self.torch.inference_mode():
             result = self.model(inputs)
         return result['text']
 
@@ -116,12 +114,9 @@ def prepare_dpg_data(args):
     # 'item_id', 'text', 'keywords', 'proposition_id', 'dependency', 'category_broad', 'category_detailed', 'tuple', 'question_natural_language'
     data = pd.read_csv(args.csv)
     for i, line in data.iterrows():
-        if i == 0:
-            continue
-
         current_id = line.item_id
         qid = int(line.proposition_id)
-        dependency_list_str = line.dependency.split(',')
+        dependency_list_str = str(line.dependency).split(',')
         dependency_list_int = []
         for d in dependency_list_str:
             d_int = int(d.strip())
@@ -281,6 +276,9 @@ def compute_dpg_one_sample(args, question_dict, image_path, vqa_model, resolutio
     return average_score, qid2tuple, qid2scores_orig, sample_res_line, sample_detail_lines
 
 def main():
+    from accelerate import Accelerator
+    from accelerate.utils import gather_object
+
     args = parse_args()
 
     accelerator = Accelerator()
@@ -307,8 +305,6 @@ def main():
         vqa_model = MPLUG(device=device)
     else:
         raise NotImplementedError
-    vqa_model = accelerator.prepare(vqa_model)
-    vqa_model = getattr(vqa_model, 'module', vqa_model) 
 
     filename_list = os.listdir(args.image_root_path)
     valid_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
