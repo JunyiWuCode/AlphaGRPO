@@ -53,13 +53,27 @@ def parse_args():
 class MPLUG(torch.nn.Module):
     def __init__(self, ckpt='damo/mplug_visual-question-answering_coco_large_en', device='gpu'):
         super().__init__()
-        from modelscope.pipelines import pipeline
+        from modelscope.hub.snapshot_download import snapshot_download
+        from modelscope.models.multi_modal.mplug_for_all_tasks import MPlugForAllTasks
+        from modelscope.preprocessors.multi_modal import MPlugPreprocessor
         from modelscope.utils.constant import Tasks
-        self.pipeline_vqa = pipeline(Tasks.visual_question_answering, model=ckpt, device=device)
+
+        self.device = torch.device(device)
+        model_dir = snapshot_download(ckpt)
+        self.preprocessor = MPlugPreprocessor(model_dir)
+        self.model = MPlugForAllTasks(
+            model_dir, task=Tasks.visual_question_answering
+        ).to(self.device)
+        self.model.eval()
 
     def vqa(self, image, question):
-        input_vqa = {'image': image, 'question': question}
-        result = self.pipeline_vqa(input_vqa)
+        inputs = self.preprocessor({'image': image, 'question': question})
+        inputs = {
+            key: value.to(self.device) if hasattr(value, 'to') else value
+            for key, value in inputs.items()
+        }
+        with torch.inference_mode():
+            result = self.model(inputs)
         return result['text']
 
 def prepare_dpg_data(args):
