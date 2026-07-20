@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=sr-tiif-qwen
 #SBATCH --account=nvr_elm_llm
-#SBATCH --partition=interactive
+#SBATCH --partition=batch_block1
 #SBATCH --nodes=2
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=64
