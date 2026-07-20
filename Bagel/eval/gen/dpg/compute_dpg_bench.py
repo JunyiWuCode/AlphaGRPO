@@ -372,7 +372,8 @@ def main():
 
     local_cat_keys = list(local_category2scores.keys())
     global_cat_keys = gather_object(local_cat_keys)
-    global_categories = set(global_cat_keys)
+    # Every rank must iterate collectives in the same category order.
+    global_categories = sorted(set(global_cat_keys))
     
     global_category2scores = defaultdict(list)
 
