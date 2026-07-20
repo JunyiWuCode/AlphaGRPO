@@ -73,7 +73,7 @@ def load_jsonl_lines(jsonl_file):
     return lines
 
 
-def generate_with_prompt(prompt, image_path, client, model='gpt-4o'):
+def generate_with_prompt(prompt, image_path, client, model='gpt-4o', temperature=1.0):
     import base64
     with open(image_path, "rb") as image_file:
         image_data = base64.b64encode(image_file.read()).decode('utf-8')
@@ -97,7 +97,7 @@ def generate_with_prompt(prompt, image_path, client, model='gpt-4o'):
     completion = client.chat.completions.create(
         model=model,
         messages=messages,
-        temperature=1.0 # You may set it to 0 if you require stricter reproducibility.
+        temperature=temperature
     )
     
     return completion.choices[0].message.content
@@ -192,7 +192,7 @@ def extract_yes_no(model_output, questions):
 
 
 
-def process_task(task, client, model, raw_prompt):
+def process_task(task, client, model, raw_prompt, temperature):
     try:
         if os.path.exists(task["out_path"]):
             print(f"Existing eval results. Skip {task['out_path']}")
@@ -202,7 +202,9 @@ def process_task(task, client, model, raw_prompt):
         questions = item.get("yn_question_list", [])
         gt_answers = item.get("yn_answer_list", [])
         prompt = format_questions_prompt(raw_prompt, questions)
-        model_output = generate_with_prompt(prompt, task["img_path"], client, model=model)
+        model_output = generate_with_prompt(
+            prompt, task["img_path"], client, model=model, temperature=temperature
+        )
         print(model_output)
         model_pred = extract_yes_no(model_output, questions)
         result = {
@@ -234,16 +236,20 @@ def main(args):
     print(f"Total tasks to process: {len(tasks)}")
 
     retry_tasks = []
-    while tasks:
+    attempt = 0
+    while tasks and (args.max_retries <= 0 or attempt < args.max_retries):
+        attempt += 1
         retry_tasks.clear()
         for task in tqdm(tasks):
-            task = process_task(task, client, args.model, raw_prompt)
+            task = process_task(task, client, args.model, raw_prompt, args.temperature)
             if task is not None:
                 retry_tasks.append(task)
         if retry_tasks:
             print(f"Retrying {len(retry_tasks)} failed tasks...")
             time.sleep(5)
         tasks = retry_tasks.copy()
+    if tasks:
+        raise RuntimeError(f"Failed to score {len(tasks)} tasks after {attempt} attempts")
 
 
 def main_parallel(args):
@@ -256,10 +262,22 @@ def main_parallel(args):
     print(f"Total tasks to process: {len(tasks)}")
 
     retry_tasks = []
-    while tasks:
+    attempt = 0
+    while tasks and (args.max_retries <= 0 or attempt < args.max_retries):
+        attempt += 1
         retry_tasks.clear()
         with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
-            future_to_task = {executor.submit(process_task, task, client, args.model, raw_prompt): task for task in tasks}
+            future_to_task = {
+                executor.submit(
+                    process_task,
+                    task,
+                    client,
+                    args.model,
+                    raw_prompt,
+                    args.temperature,
+                ): task
+                for task in tasks
+            }
             for future in tqdm(as_completed(future_to_task), total=len(tasks)):
                 result = future.result()
                 if result is not None:
@@ -269,6 +287,8 @@ def main_parallel(args):
             print(f"Retrying {len(retry_tasks)} failed tasks...")
             time.sleep(2)
         tasks = retry_tasks.copy()
+    if tasks:
+        raise RuntimeError(f"Failed to score {len(tasks)} tasks after {attempt} attempts")
 
 
 if __name__ == "__main__":
@@ -283,7 +303,16 @@ if __name__ == "__main__":
     parser.add_argument("--sample_idx_file", type=str, default=None, help="File containing sample indices")
     parser.add_argument("--postfix", type=str, default="")
     parser.add_argument("--max_workers", type=int, default=4, help="Number of parallel workers")
+    parser.add_argument("--temperature", type=float, default=1.0)
+    parser.add_argument(
+        "--max_retries",
+        type=int,
+        default=0,
+        help="Maximum attempts per failed task; 0 preserves the original unlimited retry behavior",
+    )
+    parser.add_argument("--seed", type=int, default=0)
 
     args = parser.parse_args()
+    random.seed(args.seed)
     # main(args)
     main_parallel(args)
