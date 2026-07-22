@@ -73,7 +73,14 @@ def load_jsonl_lines(jsonl_file):
     return lines
 
 
-def generate_with_prompt(prompt, image_path, client, model='gpt-4o', temperature=1.0):
+def generate_with_prompt(
+    prompt,
+    image_path,
+    client,
+    model='gpt-4o',
+    temperature=1.0,
+    max_tokens=None,
+):
     import base64
     with open(image_path, "rb") as image_file:
         image_data = base64.b64encode(image_file.read()).decode('utf-8')
@@ -94,11 +101,14 @@ def generate_with_prompt(prompt, image_path, client, model='gpt-4o', temperature
         }
     ]
 
-    completion = client.chat.completions.create(
+    request = dict(
         model=model,
         messages=messages,
-        temperature=temperature
+        temperature=temperature,
     )
+    if max_tokens is not None:
+        request["max_tokens"] = max_tokens
+    completion = client.chat.completions.create(**request)
     
     return completion.choices[0].message.content
 
@@ -121,7 +131,107 @@ def find_image_by_idx(img_dir, idx):
     else:
         raise FileNotFoundError(f"No image found for index {idx} in {img_dir}")
 
-def collect_tasks(jsonl_dir, image_dir, eval_model, output_dir, sample_idx_file=None, postfix=""):
+def load_manifest_image_map(manifest_file):
+    image_map = {}
+    for row in load_jsonl_lines(manifest_file):
+        if row.get("benchmark") != "tiif":
+            continue
+        image_path = row["output_path"]
+        path_parts = os.path.normpath(image_path).split(os.sep)
+        try:
+            tiif_index = path_parts.index("tiif")
+            attribute = path_parts[tiif_index + 2]
+            description = path_parts[tiif_index + 4]
+        except (ValueError, IndexError) as error:
+            raise ValueError(f"Unexpected TIIF manifest path: {image_path}") from error
+        key = (attribute, description, row["prompt"])
+        if key in image_map:
+            raise ValueError(f"Duplicate TIIF manifest key: {key}")
+        image_map[key] = image_path
+    if not image_map:
+        raise ValueError(f"No TIIF entries found in manifest: {manifest_file}")
+    return image_map
+
+
+def collect_tasks_from_manifest(
+    jsonl_dir,
+    generation_jsonl_dir,
+    manifest_file,
+    eval_model,
+    output_dir,
+):
+    image_map = load_manifest_image_map(manifest_file)
+    tasks = []
+    for jsonl_file in glob.glob(os.path.join(jsonl_dir, "*.jsonl")):
+        eval_lines = load_jsonl_lines(jsonl_file)
+        generation_name = os.path.basename(jsonl_file).replace(
+            "_eval_prompts.jsonl", "_prompts.jsonl"
+        )
+        generation_file = os.path.join(generation_jsonl_dir, generation_name)
+        generation_lines = load_jsonl_lines(generation_file)
+        if len(eval_lines) != len(generation_lines):
+            raise ValueError(
+                f"TIIF prompt count mismatch: {jsonl_file} has {len(eval_lines)}, "
+                f"{generation_file} has {len(generation_lines)}"
+            )
+
+        for eval_line, generation_line in zip(eval_lines, generation_lines):
+            attribute = eval_line["type"]
+            if generation_line["type"] != attribute:
+                raise ValueError(
+                    f"TIIF attribute mismatch between {jsonl_file} and {generation_file}"
+                )
+            for description in ("long_description", "short_description"):
+                key = (attribute, description, generation_line[description])
+                if key not in image_map:
+                    raise FileNotFoundError(f"No manifest image found for TIIF key: {key}")
+                image_path = image_map[key]
+                image_index = os.path.splitext(os.path.basename(image_path))[0]
+                out_dir = os.path.join(
+                    output_dir,
+                    eval_model,
+                    attribute,
+                    "long" if description.startswith("long") else "short",
+                )
+                ensure_dir(out_dir)
+                out_path = os.path.join(out_dir, f"{image_index}.json")
+                if os.path.exists(out_path):
+                    continue
+                tasks.append({
+                    "attribute": attribute,
+                    "desc": description,
+                    "jsonl_file": jsonl_file,
+                    "line_idx": int(image_index),
+                    "jsonl_line": eval_line,
+                    "img_path": image_path,
+                    "out_path": out_path,
+                })
+    return tasks
+
+
+def collect_tasks(
+    jsonl_dir,
+    image_dir,
+    eval_model,
+    output_dir,
+    sample_idx_file=None,
+    postfix="",
+    generation_jsonl_dir=None,
+    manifest_file=None,
+):
+    if bool(generation_jsonl_dir) != bool(manifest_file):
+        raise ValueError("generation_jsonl_dir and manifest_file must be provided together")
+    if manifest_file:
+        if sample_idx_file is not None or postfix:
+            raise ValueError("Manifest-based TIIF lookup does not support sampling or postfix")
+        return collect_tasks_from_manifest(
+            jsonl_dir,
+            generation_jsonl_dir,
+            manifest_file,
+            eval_model,
+            output_dir,
+        )
+
     tasks = []
     jsonl_files = glob.glob(os.path.join(jsonl_dir, "*.jsonl"))
     if sample_idx_file is not None:
@@ -177,7 +287,7 @@ def collect_tasks(jsonl_dir, image_dir, eval_model, output_dir, sample_idx_file=
 
 class OutputFormatError(Exception):
     pass
-def extract_yes_no(model_output, questions):
+def extract_yes_no(model_output, questions, allow_extra_answers=False):
     lines = [line.strip() for line in model_output.strip().split('\n') if line.strip()]
     preds = []
     for idx, line in enumerate(lines):
@@ -186,13 +296,23 @@ def extract_yes_no(model_output, questions):
             preds.append(m.group(1).lower())
         else:
             continue
+    if allow_extra_answers and len(preds) >= len(questions):
+        return preds[:len(questions)]
     if len(preds) != len(questions):
         raise OutputFormatError(f"Preds count {len(preds)} != questions count {len(questions)}")
     return preds
 
 
 
-def process_task(task, client, model, raw_prompt, temperature):
+def process_task(
+    task,
+    client,
+    model,
+    raw_prompt,
+    temperature,
+    max_tokens_per_question,
+    allow_extra_answers,
+):
     try:
         if os.path.exists(task["out_path"]):
             print(f"Existing eval results. Skip {task['out_path']}")
@@ -202,11 +322,19 @@ def process_task(task, client, model, raw_prompt, temperature):
         questions = item.get("yn_question_list", [])
         gt_answers = item.get("yn_answer_list", [])
         prompt = format_questions_prompt(raw_prompt, questions)
+        max_tokens = None
+        if max_tokens_per_question > 0:
+            max_tokens = max(128, len(questions) * max_tokens_per_question)
         model_output = generate_with_prompt(
-            prompt, task["img_path"], client, model=model, temperature=temperature
+            prompt,
+            task["img_path"],
+            client,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
         print(model_output)
-        model_pred = extract_yes_no(model_output, questions)
+        model_pred = extract_yes_no(model_output, questions, allow_extra_answers)
         result = {
             "attribute": task["attribute"],
             "desc": task["desc"],
@@ -232,7 +360,16 @@ def main(args):
         base_url=args.base_url
     )
 
-    tasks = collect_tasks(args.jsonl_dir, args.image_dir, args.eval_model, args.output_dir, args.sample_idx_file, args.postfix)
+    tasks = collect_tasks(
+        args.jsonl_dir,
+        args.image_dir,
+        args.eval_model,
+        args.output_dir,
+        args.sample_idx_file,
+        args.postfix,
+        args.generation_jsonl_dir,
+        args.manifest_file,
+    )
     print(f"Total tasks to process: {len(tasks)}")
 
     retry_tasks = []
@@ -241,7 +378,15 @@ def main(args):
         attempt += 1
         retry_tasks.clear()
         for task in tqdm(tasks):
-            task = process_task(task, client, args.model, raw_prompt, args.temperature)
+            task = process_task(
+                task,
+                client,
+                args.model,
+                raw_prompt,
+                args.temperature,
+                args.max_tokens_per_question,
+                args.allow_extra_answers,
+            )
             if task is not None:
                 retry_tasks.append(task)
         if retry_tasks:
@@ -258,7 +403,16 @@ def main_parallel(args):
         base_url=args.base_url
     )
 
-    tasks = collect_tasks(args.jsonl_dir, args.image_dir, args.eval_model, args.output_dir, args.sample_idx_file, args.postfix)
+    tasks = collect_tasks(
+        args.jsonl_dir,
+        args.image_dir,
+        args.eval_model,
+        args.output_dir,
+        args.sample_idx_file,
+        args.postfix,
+        args.generation_jsonl_dir,
+        args.manifest_file,
+    )
     print(f"Total tasks to process: {len(tasks)}")
 
     retry_tasks = []
@@ -275,6 +429,8 @@ def main_parallel(args):
                     args.model,
                     raw_prompt,
                     args.temperature,
+                    args.max_tokens_per_question,
+                    args.allow_extra_answers,
                 ): task
                 for task in tasks
             }
@@ -302,6 +458,8 @@ if __name__ == "__main__":
     parser.add_argument("--model", type=str, default="gpt-4o", help="Model name")
     parser.add_argument("--sample_idx_file", type=str, default=None, help="File containing sample indices")
     parser.add_argument("--postfix", type=str, default="")
+    parser.add_argument("--generation_jsonl_dir", type=str, default=None)
+    parser.add_argument("--manifest_file", type=str, default=None)
     parser.add_argument("--max_workers", type=int, default=4, help="Number of parallel workers")
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument(
@@ -311,6 +469,13 @@ if __name__ == "__main__":
         help="Maximum attempts per failed task; 0 preserves the original unlimited retry behavior",
     )
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--max_tokens_per_question",
+        type=int,
+        default=0,
+        help="Bound completion length; 0 leaves the API default unchanged",
+    )
+    parser.add_argument("--allow_extra_answers", action="store_true")
 
     args = parser.parse_args()
     random.seed(args.seed)

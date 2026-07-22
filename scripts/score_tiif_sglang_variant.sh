@@ -54,6 +54,8 @@ done
 
 "${ENV_PREFIX}/bin/python" "${ROOT}/Bagel/eval/gen/tiif/eval_with_vlm.py" \
   --jsonl_dir "${ROOT}/Bagel/eval/gen/tiif/testmini_eval_prompts" \
+  --generation_jsonl_dir "${ROOT}/Bagel/eval/gen/tiif/testmini_prompts" \
+  --manifest_file "${OUTPUT_ROOT}/${VARIANT}/manifest.jsonl" \
   --image_dir "${OUTPUT_ROOT}/${VARIANT}/tiif/images" \
   --eval_model sd35 \
   --output_dir "${RESULT_DIR}/raw" \
@@ -62,6 +64,8 @@ done
   --model "${MODEL}" \
   --max_workers "${TIIF_MAX_WORKERS:-32}" \
   --temperature 0 \
+  --max_tokens_per_question 24 \
+  --allow_extra_answers \
   --seed 0 \
   --max_retries 8
 
